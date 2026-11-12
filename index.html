@@ -340,14 +340,15 @@
                 {octaveId: 'octave-3', data: audioConfig.octave3}
             ].forEach(octave => {
                 const container = document.getElementById(octave.octaveId);
-                octave.data.forEach((note, index) => {
+                octave.data.forEach(note => {
                     const button = document.createElement('button');
                     button.className = 'note-button';
                     button.innerHTML = `
                         <span class="note-name">${note.name}</span>
                         <span class="note-freq">${note.freq} Hz</span>
                     `;
-                    button.onclick = () => playNote(index);
+                    // note.id is 1-based across all 22 notes; audioElements is a flat 0-based list
+                    button.onclick = () => playNote(note.id - 1);
                     container.appendChild(button);
                 });
             });
