@@ -319,6 +319,20 @@
                 <div class="note-match" id="noteMatch">Waiting for sound...</div>
             </div>
 
+            <div class="test-panel" style="margin-top:16px">
+                <div style="font-weight:bold; margin-bottom:8px">🔍 Live debug (what the detector hears now)</div>
+                <div id="liveDebug" style="font-family:monospace; font-size:0.9em">Click "Start Playing" to see live readings.</div>
+            </div>
+
+            <div class="test-panel" style="margin-top:16px">
+                <div style="font-weight:bold; margin-bottom:8px">🧪 Detection test (does not advance the melody)</div>
+                <div class="controls">
+                    <button onclick="runDetectionTest(true)">Test with samples (no mic)</button>
+                    <button onclick="runDetectionTest(false)">Test with mic (play each note)</button>
+                </div>
+                <div id="testResults"></div>
+            </div>
+
             <div class="hint">
                 <strong>💡 Tip:</strong> Play the angklung notes in order shown in the blue box above.
                 The app will automatically detect when you've played the correct note and move to the next one.
@@ -337,14 +351,27 @@
         ];
 
         const NOTE_TO_FREQUENCY = {
-            1: 261.63,  // C5 (Do)
-            2: 277.19,  // D5 (Re)
-            3: 293.67,  // E5 (Mi)
-            4: 311.13,  // F5 (Fa)
-            5: 329.63,  // G5 (Sol)
-            6: 349.23,  // A5 (La)
-            7: 370.00   // B5 (Ti)
+            1: 523.25,  // C5 (Do)
+            2: 587.33,  // D5 (Re)
+            3: 659.26,  // E5 (Mi)
+            4: 698.46,  // F5 (Fa)
+            5: 783.99,  // G5 (Sol)
+            6: 880.00,  // A5 (La)
+            7: 987.77   // B5 (Ti)
         };
+
+        // Matching tolerance in cents (1 semitone = 100 cents)
+        const EXACT_CENTS = 40;
+        const CLOSE_CENTS = 100;
+        // Consecutive frames a note must be held before it counts (~100 ms at 60 fps)
+        const REQUIRED_STABLE_FRAMES = 6;
+        // Minimum time between accepted notes, so one strike can only advance once
+        const MIN_NOTE_GAP_MS = 400;
+        // Consecutive silent frames (~130 ms) needed before a repeated note can count again
+        const REST_FRAMES = 8;
+        // Detection band for the melody fundamentals
+        const MIN_DETECT_HZ = 200;
+        const MAX_DETECT_HZ = 1500;
 
         const NOTE_NAMES = {
             1: 'Do (C5)',
@@ -367,8 +394,18 @@
         };
 
         let currentNoteIndex = 0;
+        let stableCount = 0;
+        let lockedAfterMatch = false;
+        let differentFrames = 0;
+        let silentFrames = 0;
+        let lastAcceptTime = 0;
+        let lastMatchedFreq = 0;
         let audioContext = null;
         let analyser = null;
+        let inputFilter = null;
+        // Noise gate state: the peak bin from the previous frame, and how many frames in a row it has held
+        let lastPeakBin = -10;
+        let peakRepeat = 0;
         let dataArray = null;
         let animationId = null;
         let mediaStream = null;
@@ -380,7 +417,19 @@
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
                 analyser.fftSize = 4096;
+                // No time smoothing: otherwise a note's energy lingers and hides the next one
+                analyser.smoothingTimeConstant = 0;
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                // Noise filter: keep only the melody range (removes rumble below and hiss above)
+                inputFilter = audioContext.createBiquadFilter();
+                inputFilter.type = 'highpass';
+                inputFilter.frequency.value = 180;
+                const lowpass = audioContext.createBiquadFilter();
+                lowpass.type = 'lowpass';
+                lowpass.frequency.value = 1600;
+                inputFilter.connect(lowpass);
+                lowpass.connect(analyser);
             }
         }
 
@@ -445,18 +494,35 @@
             initAudio();
 
             try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const source = audioContext.createMediaStreamAudioSource(mediaStream);
-                source.connect(analyser);
+                // Turn off mic processing: noise suppression and auto gain distort tonal notes
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+                });
+                const createSource = audioContext.createMediaStreamAudioSource
+                    ? audioContext.createMediaStreamAudioSource.bind(audioContext)
+                    : audioContext.createMediaStreamSource.bind(audioContext);
+                const source = createSource(mediaStream);
+                source.connect(inputFilter);
 
                 micActive = true;
                 document.getElementById('startMicBtn').disabled = true;
                 document.getElementById('stopMicBtn').disabled = false;
-                document.getElementById('micStatus').textContent = 'Listening...';
 
+                calibrateNoise();   // quiet 2 s first, sets the loudness gate
                 detectFrequency();
             } catch (error) {
-                showMessage('Microphone access denied. Please allow microphone permissions.', 'error');
+                console.error('Microphone error:', error.name, error.message);
+                let reason = 'Microphone error: ' + error.name;
+                if (!window.isSecureContext || !navigator.mediaDevices) {
+                    reason = 'Microphone needs a secure context (https or localhost). Current origin: ' + location.origin;
+                } else if (error.name === 'NotAllowedError') {
+                    reason = 'Microphone access denied. Check the browser site permission and Windows Settings > Privacy > Microphone (desktop apps must be allowed).';
+                } else if (error.name === 'NotFoundError') {
+                    reason = 'No microphone found.';
+                } else if (error.name === 'NotReadableError') {
+                    reason = 'Microphone is in use by another app.';
+                }
+                showMessage(reason, 'error');
             }
         }
 
@@ -475,30 +541,165 @@
             document.getElementById('noteMatch').textContent = 'Waiting for sound...';
         }
 
-        function detectFrequency() {
-            analyser.getByteFrequencyData(dataArray);
+        // Live debug: what the detector saw in the latest frame
+        let lastReading = { rawHz: 0, rms: 0, maxValue: 0, median: 0, contrast: 0, isClear: false, stable: 0, detectedHz: 0 };
 
-            // Find peak frequency
+        // Loudness gate: steady room noise passes the peak checks, so it also needs to be loud enough.
+        // levelGate is set by calibrateNoise() from the quiet room; until then a default is used.
+        let levelGate = null;
+        let calibrating = false;
+        let timeBuf = null;
+
+        // Loudness (RMS) of the latest audio samples
+        function readRms() {
+            if (!timeBuf) timeBuf = new Float32Array(analyser.fftSize);
+            analyser.getFloatTimeDomainData(timeBuf);
+            let sumSq = 0;
+            for (let i = 0; i < timeBuf.length; i++) sumSq += timeBuf[i] * timeBuf[i];
+            return Math.sqrt(sumSq / timeBuf.length);
+        }
+
+        // Measures the room's loudest background for 2 s; stay quiet while it runs
+        async function calibrateNoise() {
+            calibrating = true;
+            levelGate = null;
+            const status = document.getElementById('micStatus');
+            status.textContent = 'Calibrating... stay quiet for 2 seconds';
+            let maxRms = 0;
+            const t0 = performance.now();
+            while (performance.now() - t0 < 2000 && micActive) {
+                maxRms = Math.max(maxRms, readRms());
+                await new Promise(r => setTimeout(r, 20));
+            }
+            if (micActive) {
+                levelGate = Math.max(maxRms * 2, 0.003);
+                status.textContent = 'Listening...';
+            }
+            calibrating = false;
+        }
+
+        // Signed cents offset from the target, using whichever octave is closest.
+        // An angklung note rings two tubes, one normal and one an octave higher,
+        // so the detected pitch may be the target or one octave away from it.
+        function octaveCents(hz, target) {
+            let best = null;
+            for (const o of [-1, 0, 1]) {
+                const c = 1200 * Math.log2(hz / (target * Math.pow(2, o)));
+                if (best === null || Math.abs(c) < Math.abs(best)) best = c;
+            }
+            return best;
+        }
+
+        // Closest melody note to a frequency, with the offset in cents
+        function nearestNote(hz) {
+            let best = null;
+            for (const n of [1, 2, 3, 4, 5, 6, 7]) {
+                const cents = octaveCents(hz, NOTE_TO_FREQUENCY[n]);
+                if (!best || Math.abs(cents) < Math.abs(best.cents)) best = { n, cents };
+            }
+            return best;
+        }
+
+        function showLiveDebug() {
+            const el = document.getElementById('liveDebug');
+            const r = lastReading;
+            const raw = r.rawHz > 0 ? nearestNote(r.rawHz) : null;
+            const out = r.detectedHz > 0 ? nearestNote(r.detectedHz) : null;
+            const outName = out && Math.abs(out.cents) <= 100 ? NOTE_NAMES[out.n] : 'none';
+            el.innerHTML = `
+                Raw peak: ${r.rawHz ? r.rawHz.toFixed(1) + ' Hz' : '-'}${raw ? ` (closest ${NOTE_NAMES[raw.n]}, ${raw.cents >= 0 ? '+' : ''}${raw.cents.toFixed(0)} ¢)` : ''}<br>
+                Loudness ${r.rms.toFixed(4)} (gate ${(levelGate !== null ? levelGate : 0.01).toFixed(4)}${levelGate === null ? ', not calibrated' : ''})<br>
+                Peak level ${r.maxValue}, background median ${r.median}, contrast ${r.contrast} (need 25 and level above 30)<br>
+                Clear sound: ${r.isClear ? 'yes' : 'no'} | Same peak for ${r.stable} frames (need 3)<br>
+                <strong>Detected note: ${outName}</strong>${out ? ` at ${r.detectedHz.toFixed(1)} Hz (${out.cents >= 0 ? '+' : ''}${out.cents.toFixed(0)} ¢)` : ''}`;
+        }
+
+        // Returns the melody fundamental in Hz, or 0 if there is no clear sound
+        function measureFrequency() {
+            analyser.getByteFrequencyData(dataArray);
+            const rms = readRms();
+
+            // Strongest bin inside the melody band (ignores rumble and hiss)
+            const binHz = audioContext.sampleRate / analyser.fftSize;
+            const minBin = Math.max(1, Math.floor(MIN_DETECT_HZ / binHz));
+            const maxBin = Math.min(dataArray.length - 2, Math.ceil(MAX_DETECT_HZ / binHz));
+            let peakBin = minBin;
             let maxValue = 0;
-            let maxIndex = 0;
-            for (let i = 0; i < dataArray.length; i++) {
+            for (let i = minBin; i <= maxBin; i++) {
                 if (dataArray[i] > maxValue) {
                     maxValue = dataArray[i];
-                    maxIndex = i;
+                    peakBin = i;
                 }
             }
 
-            // Convert bin index to frequency
-            const nyquist = audioContext.sampleRate / 2;
-            const frequency = (maxIndex * nyquist) / analyser.frequencyBinCount;
+            // Noise gate 1: a note is a clear peak standing above the band's median level
+            // (most bins are quiet for a note, while noise sits at a high flat level)
+            const sorted = dataArray.slice(minBin, maxBin + 1).sort();
+            const bandMedian = sorted[sorted.length >> 1];
+            const loud = rms >= (levelGate !== null ? levelGate : 0.01);
+            const isClear = loud && maxValue > 30 && maxValue - bandMedian >= 25;
+            lastReading = {
+                rawHz: interpolatedFrequency(peakBin, binHz),
+                rms,
+                maxValue,
+                median: bandMedian,
+                contrast: maxValue - bandMedian,
+                isClear,
+                stable: 0,
+                detectedHz: 0
+            };
+            if (!isClear) {
+                peakRepeat = 0;
+                return 0;
+            }
 
-            // Only show if significant sound detected
-            if (maxValue > 30) {
+            // Noise gate 2: noise peaks jump to a different bin every frame, a note keeps its bin
+            peakRepeat = Math.abs(peakBin - lastPeakBin) <= 1 ? peakRepeat + 1 : 1;
+            lastPeakBin = peakBin;
+            lastReading.stable = peakRepeat;
+            if (peakRepeat < 3) return 0;
+
+            // Angklung overtones can be louder than the fundamental, so if there is a
+            // strong peak at half this frequency, the lower one is the real note
+            let bin = peakBin;
+            for (;;) {
+                const halfCentre = Math.round(bin / 2);
+                if (halfCentre * binHz < MIN_DETECT_HZ) break;
+                let halfPeak = halfCentre, halfValue = 0;
+                for (let i = Math.max(minBin, halfCentre - 1); i <= halfCentre + 1; i++) {
+                    if (dataArray[i] > halfValue) { halfValue = dataArray[i]; halfPeak = i; }
+                }
+                if (halfValue < 0.7 * maxValue) break;
+                bin = halfPeak;
+            }
+            const hz = interpolatedFrequency(bin, binHz);
+            lastReading.detectedHz = hz;
+            return hz;
+        }
+
+        function detectFrequency() {
+            if (calibrating) {
+                // Still measuring the room: don't match notes yet
+                if (micActive) animationId = requestAnimationFrame(detectFrequency);
+                return;
+            }
+            const frequency = measureFrequency();
+            showLiveDebug();
+
+            if (frequency > 0) {
+                silentFrames = 0;
                 document.getElementById('frequencyValue').textContent = frequency.toFixed(1) + ' Hz';
                 checkNoteMatch(frequency);
             } else {
                 document.getElementById('frequencyValue').textContent = '-- Hz';
                 document.getElementById('noteMatch').textContent = 'Listening...';
+                stableCount = 0;
+                silentFrames++;
+                // Only a real rest unlocks the last note, not a single quiet frame
+                if (silentFrames >= REST_FRAMES) {
+                    lockedAfterMatch = false;
+                    differentFrames = 0;
+                }
             }
 
             if (micActive) {
@@ -506,32 +707,67 @@
             }
         }
 
-        function checkNoteMatch(detectedFreq) {
-            const targetNote = MELODY[currentNoteIndex];
-            const targetFreq = NOTE_TO_FREQUENCY[targetNote];
+        // Parabolic interpolation between neighbouring bins for sub-bin accuracy
+        function interpolatedFrequency(bin, binHz) {
+            const a = dataArray[bin - 1];
+            const b = dataArray[bin];
+            const c = dataArray[bin + 1];
+            const denom = a - 2 * b + c;
+            let shift = denom === 0 ? 0 : (a - c) / (2 * denom);
+            shift = Math.max(-0.5, Math.min(0.5, shift));
+            return (bin + shift) * binHz;
+        }
 
-            // Tolerance: ±5 Hz for exact match, ±15 Hz for close match
-            const exactTolerance = 5;
-            const closeTolerance = 15;
-            const difference = Math.abs(detectedFreq - targetFreq);
+        function checkNoteMatch(detectedFreq) {
+            if (currentNoteIndex >= MELODY.length || testing) return;
 
             const matchElement = document.getElementById('noteMatch');
 
-            if (difference < exactTolerance && detectedFreq > 100) {
-                matchElement.textContent = `✓ Correct! ${NOTE_NAMES[targetNote]}`;
-                matchElement.classList.remove('close');
-                matchElement.classList.add('match');
+            // After a note is accepted, ignore the same sound until it changes or stops
+            // A single harmonic glitch must not unlock it, so require several frames at a new pitch
+            if (lockedAfterMatch) {
+                const centsFromLast = Math.abs(octaveCents(detectedFreq, lastMatchedFreq));
+                if (centsFromLast <= CLOSE_CENTS) {
+                    differentFrames = 0;
+                    return;
+                }
+                differentFrames++;
+                if (differentFrames < REQUIRED_STABLE_FRAMES) return;
+                lockedAfterMatch = false;
+                differentFrames = 0;
+            }
 
-                // Advance to next note after 500ms
-                setTimeout(() => {
+            const targetNote = MELODY[currentNoteIndex];
+            const targetFreq = NOTE_TO_FREQUENCY[targetNote];
+            const centsOff = Math.abs(octaveCents(detectedFreq, targetFreq));
+
+            if (centsOff <= EXACT_CENTS) {
+                // One note at a time: ignore anything within the gap after the last accepted note
+                if (performance.now() - lastAcceptTime < MIN_NOTE_GAP_MS) return;
+
+                stableCount++;
+                if (stableCount >= REQUIRED_STABLE_FRAMES) {
+                    // Accept the note once, then move on
+                    lastMatchedFreq = targetFreq;
+                    lastAcceptTime = performance.now();
+                    lockedAfterMatch = true;
+                    stableCount = 0;
+
                     currentNoteIndex++;
                     renderNotation();
+                    matchElement.textContent = `✓ Correct! ${NOTE_NAMES[targetNote]}`;
+                    matchElement.classList.remove('close');
+                    matchElement.classList.add('match');
 
                     if (currentNoteIndex >= MELODY.length) {
                         completeGame();
                     }
-                }, 300);
-            } else if (difference < closeTolerance && detectedFreq > 100) {
+                }
+                return;
+            }
+
+            stableCount = 0;
+            if (centsOff <= CLOSE_CENTS) {
                 matchElement.textContent = `≈ Close! Aim for ${targetFreq.toFixed(1)} Hz`;
                 matchElement.classList.add('close');
                 matchElement.classList.remove('match');
@@ -539,6 +775,104 @@
                 matchElement.textContent = `Need ${NOTE_NAMES[targetNote]} (${targetFreq.toFixed(1)} Hz)`;
                 matchElement.classList.remove('close', 'match');
             }
+        }
+
+        // ---- Detection test: checks every note without advancing the melody ----
+        let testing = false;
+
+        // Shows the next note and waits for the user to press Record
+        function waitForRecordClick(n) {
+            return new Promise(resolve => {
+                const box = document.getElementById('testResults');
+                box.innerHTML = `
+                    <p>Next: <strong>${NOTE_NAMES[n]}</strong>. Press Record, then play that note once.</p>
+                    <button id="recordBtn">⏺ Record ${NOTE_NAMES[n]}</button>`;
+                document.getElementById('recordBtn').onclick = () => resolve();
+            });
+        }
+
+        async function runDetectionTest(useSamples) {
+            const results = document.getElementById('testResults');
+            const micStatus = document.getElementById('micStatus');
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+            if (!useSamples && !micActive) {
+                results.innerHTML = '<p>Click "Start Playing" first, then run the mic test.</p>';
+                return;
+            }
+
+            testing = true;
+            initAudio();
+            await audioContext.resume();
+
+            let bufs = {};
+            if (useSamples) {
+                for (const n of [1, 2, 3, 4, 5, 6, 7]) {
+                    bufs[n] = await audioContext.decodeAudioData(await (await fetch(AUDIO_FILES[n])).arrayBuffer());
+                }
+            }
+
+            const rows = [];
+            for (const n of [1, 2, 3, 4, 5, 6, 7]) {
+                const target = NOTE_TO_FREQUENCY[n];
+                let src = null;
+
+                if (useSamples) {
+                    src = audioContext.createBufferSource();
+                    src.buffer = bufs[n];
+                    src.connect(inputFilter);
+                    src.start();
+                    setTimeout(() => src.stop(), 800);
+                } else {
+                    // Recording starts only when you press the button, never on room noise
+                    await waitForRecordClick(n);
+                    micStatus.textContent = `Recording ${NOTE_NAMES[n]}... play it now`;
+                }
+
+                // Readings window: 1.5 s for samples, 2.5 s for the mic (time to play after clicking)
+                const heard = [];
+                let frames = 0;
+                const t0 = performance.now();
+                const windowMs = useSamples ? 1500 : 2500;
+                while (performance.now() - t0 < windowMs) {
+                    const f = measureFrequency();
+                    frames++;
+                    if (f > 0) heard.push(f);
+                    await sleep(16);
+                }
+                if (src) src.disconnect();
+
+                heard.sort((a, b) => a - b);
+                const median = heard.length ? heard[Math.floor(heard.length / 2)] : 0;
+                const cents = median ? octaveCents(median, target) : null;
+                const pass = heard.length >= 10 && Math.abs(cents) <= EXACT_CENTS;
+                rows.push({ n, target, median, cents, frames: heard.length, pass });
+                await sleep(500);
+            }
+
+            testing = false;
+            micStatus.textContent = useSamples ? 'Sample test finished' : 'Mic test finished';
+            renderTestResults(rows);
+        }
+
+        function renderTestResults(rows) {
+            const passed = rows.filter(r => r.pass).length;
+            const body = rows.map(r => `
+                <tr>
+                    <td>${NOTE_NAMES[r.n]}</td>
+                    <td>${r.target.toFixed(1)} Hz</td>
+                    <td>${r.median ? r.median.toFixed(1) + ' Hz' : 'not heard'}</td>
+                    <td>${r.cents === null ? '-' : (r.cents >= 0 ? '+' : '') + r.cents.toFixed(0) + ' ¢'}</td>
+                    <td>${r.frames} frames</td>
+                    <td style="color:${r.pass ? '#2e7d32' : '#c62828'}; font-weight:bold">${r.pass ? 'PASS' : 'FAIL'}</td>
+                </tr>`).join('');
+            document.getElementById('testResults').innerHTML = `
+                <p><strong>${passed} / ${rows.length} notes detected correctly</strong> (within ${EXACT_CENTS} cents, same note in either octave)</p>
+                <div style="overflow-x:auto">
+                <table style="border-collapse:collapse; width:100%; font-size:0.9em">
+                    <tr><th align="left">Note</th><th align="left">Target</th><th align="left">Heard</th><th align="left">Off</th><th align="left">Readings</th><th align="left">Result</th></tr>
+                    ${body}
+                </table></div>`;
         }
 
         function completeGame() {
@@ -549,6 +883,10 @@
 
         function resetGame() {
             currentNoteIndex = 0;
+            stableCount = 0;
+            lockedAfterMatch = false;
+            silentFrames = 0;
+            lastAcceptTime = 0;
             stopMicInput();
             renderNotation();
             document.getElementById('message').innerHTML = '';
