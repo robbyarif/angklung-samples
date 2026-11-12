@@ -1,0 +1,3 @@
+[build]
+  # Deploy only the public/ folder. No build step: the site is static files.
+  publish = "public"
