@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Angklung Audio - 22 Note Extended Package</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.85em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .octave-section {
+            margin-bottom: 40px;
+        }
+
+        .octave-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .notes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .note-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .note-button:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+        }
+
+        .note-button:active {
+            transform: translateY(-2px);
+        }
+
+        .note-name {
+            font-size: 1.3em;
+        }
+
+        .note-freq {
+            font-size: 0.7em;
+            opacity: 0.9;
+        }
+
+        .details-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 30px;
+        }
+
+        .details-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+            overflow-x: auto;
+        }
+
+        .details-table th,
+        .details-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .details-table th {
+            background: #e9ecef;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .details-table tr:hover {
+            background: #f0f0f0;
+        }
+
+        .keyboard-hint {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e3f2fd;
+            border-left: 4px solid #667eea;
+            border-radius: 5px;
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .notes-grid {
+                grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+                gap: 8px;
+            }
+
+            .note-button {
+                padding: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎵 Angklung Audio - Extended Package</h1>
+            <p class="subtitle">22 Notes | C4 to C7 | 3+ Octaves</p>
+        </header>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-label">Total Notes</div>
+                <div class="stat-value">22</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Range</div>
+                <div class="stat-value">C4 - C7</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Format</div>
+                <div class="stat-value">WAV 44kHz</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Scale</div>
+                <div class="stat-value">Chromatic</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button onclick="playScale()">▶ Play Scale (C4-C7)</button>
+            <button onclick="playSample()">🎶 Rasa Sayange Sample</button>
+            <button onclick="stopAllAudio()">⏹ Stop All</button>
+        </div>
+
+        <!-- Lower Octave -->
+        <div class="octave-section">
+            <div class="octave-title">Lower Octave (C4 - B4)</div>
+            <div class="notes-grid" id="octave-1"></div>
+        </div>
+
+        <!-- Middle Octave -->
+        <div class="octave-section">
+            <div class="octave-title">Middle Octave (C5 - C6)</div>
+            <div class="notes-grid" id="octave-2"></div>
+        </div>
+
+        <!-- Higher Octave -->
+        <div class="octave-section">
+            <div class="octave-title">Higher Octave (D6 - C7)</div>
+            <div class="notes-grid" id="octave-3"></div>
+        </div>
+
+        <div class="keyboard-hint">
+            <strong>⌨️ Keyboard Shortcuts:</strong> Press C-G or A-B to play notes (e.g., C4, D4, C7)
+        </div>
+
+        <div class="details-section">
+            <h3>Note Reference Table</h3>
+            <table class="details-table">
+                <thead>
+                    <tr>
+                        <th>Octave</th>
+                        <th>Note</th>
+                        <th>MIDI</th>
+                        <th>Frequency</th>
+                        <th>Duration</th>
+                    </tr>
+                </thead>
+                <tbody id="detailsTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const audioConfig = {
+            octave1: [
+                {id: 1, name: 'C4', file: 'C4.wav', midi: 36, freq: 130.81, duration: 1.229},
+                {id: 2, name: 'D4', file: 'D4.wav', midi: 38, freq: 138.59, duration: 1.092},
+                {id: 3, name: 'E4', file: 'E4.wav', midi: 40, freq: 146.83, duration: 1.129},
+                {id: 4, name: 'F4', file: 'F4.wav', midi: 41, freq: 155.56, duration: 0.509},
+                {id: 5, name: 'G4', file: 'G4.wav', midi: 43, freq: 164.81, duration: 0.950},
+                {id: 6, name: 'A4', file: 'A4.wav', midi: 45, freq: 174.61, duration: 1.050},
+                {id: 7, name: 'B4', file: 'B4.wav', midi: 47, freq: 185.00, duration: 0.620}
+            ],
+            octave2: [
+                {id: 8, name: 'C5', file: 'C5.wav', midi: 48, freq: 261.63, duration: 1.229},
+                {id: 9, name: 'D5', file: 'D5.wav', midi: 50, freq: 277.19, duration: 1.092},
+                {id: 10, name: 'E5', file: 'E5.wav', midi: 52, freq: 293.67, duration: 1.129},
+                {id: 11, name: 'F5', file: 'F5.wav', midi: 53, freq: 311.13, duration: 0.509},
+                {id: 12, name: 'G5', file: 'G5.wav', midi: 55, freq: 329.63, duration: 0.950},
+                {id: 13, name: 'A5', file: 'A5.wav', midi: 57, freq: 349.23, duration: 1.050},
+                {id: 14, name: 'B5', file: 'B5.wav', midi: 59, freq: 370.00, duration: 0.620},
+                {id: 15, name: 'C6', file: 'C6.wav', midi: 60, freq: 523.25, duration: 1.800}
+            ],
+            octave3: [
+                {id: 16, name: 'D6', file: 'D6.wav', midi: 62, freq: 554.37, duration: 1.092},
+                {id: 17, name: 'E6', file: 'E6.wav', midi: 64, freq: 587.33, duration: 1.129},
+                {id: 18, name: 'F6', file: 'F6.wav', midi: 65, freq: 622.25, duration: 0.509},
+                {id: 19, name: 'G6', file: 'G6.wav', midi: 67, freq: 659.25, duration: 0.950},
+                {id: 20, name: 'A6', file: 'A6.wav', midi: 69, freq: 698.46, duration: 1.050},
+                {id: 21, name: 'B6', file: 'B6.wav', midi: 71, freq: 740.00, duration: 0.620},
+                {id: 22, name: 'C7', file: 'C7.wav', midi: 72, freq: 1046.50, duration: 1.800}
+            ]
+        };
+
+        let audioElements = [];
+        let playingAudios = [];
+        let rasaSayangeAudio = null;
+
+        function init() {
+            createNoteButtons();
+            createDetailsTable();
+            preloadAudio();
+            setupKeyboardShortcuts();
+        }
+
+        function createNoteButtons() {
+            [
+                {octaveId: 'octave-1', data: audioConfig.octave1},
+                {octaveId: 'octave-2', data: audioConfig.octave2},
+                {octaveId: 'octave-3', data: audioConfig.octave3}
+            ].forEach(octave => {
+                const container = document.getElementById(octave.octaveId);
+                octave.data.forEach((note, index) => {
+                    const button = document.createElement('button');
+                    button.className = 'note-button';
+                    button.innerHTML = `
+                        <span class="note-name">${note.name}</span>
+                        <span class="note-freq">${note.freq} Hz</span>
+                    `;
+                    button.onclick = () => playNote(index);
+                    container.appendChild(button);
+                });
+            });
+        }
+
+        function createDetailsTable() {
+            const tbody = document.getElementById('detailsTable');
+            const allNotes = [...audioConfig.octave1, ...audioConfig.octave2, ...audioConfig.octave3];
+
+            allNotes.forEach(note => {
+                const octave = note.name.match(/\d+/)[0];
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${octave}</td>
+                    <td><strong>${note.name}</strong></td>
+                    <td>${note.midi}</td>
+                    <td>${note.freq} Hz</td>
+                    <td>${note.duration.toFixed(3)}s</td>
+                `;
+            });
+        }
+
+        function preloadAudio() {
+            const allNotes = [...audioConfig.octave1, ...audioConfig.octave2, ...audioConfig.octave3];
+            allNotes.forEach(note => {
+                const audio = new Audio(note.file);
+                audio.preload = 'auto';
+                audioElements.push(audio);
+            });
+
+            // Preload Rasa Sayange sample
+            rasaSayangeAudio = new Audio('rasa_sayange.wav');
+            rasaSayangeAudio.preload = 'auto';
+        }
+
+        function playNote(index) {
+            stopAllAudio();
+            if (index < audioElements.length) {
+                const audio = audioElements[index];
+                audio.currentTime = 0;
+                audio.play();
+            }
+        }
+
+        async function playScale() {
+            stopAllAudio();
+            const allNotes = [...audioConfig.octave1, ...audioConfig.octave2, ...audioConfig.octave3];
+
+            for (let i = 0; i < allNotes.length; i++) {
+                const audio = audioElements[i];
+                audio.currentTime = 0;
+                audio.play();
+
+                await new Promise(resolve => {
+                    audio.onended = resolve;
+                    setTimeout(resolve, (allNotes[i].duration * 1000) + 100);
+                });
+            }
+        }
+
+        function playSample() {
+            stopAllAudio();
+            if (rasaSayangeAudio) {
+                rasaSayangeAudio.currentTime = 0;
+                rasaSayangeAudio.play();
+            }
+        }
+
+        function stopAllAudio() {
+            audioElements.forEach(audio => {
+                audio.pause();
+                audio.currentTime = 0;
+            });
+            if (rasaSayangeAudio) {
+                rasaSayangeAudio.pause();
+                rasaSayangeAudio.currentTime = 0;
+            }
+        }
+
+        function setupKeyboardShortcuts() {
+            const keyMap = {
+                'c4': 0, 'd4': 1, 'e4': 2, 'f4': 3, 'g4': 4, 'a4': 5, 'b4': 6,
+                'c5': 7, 'd5': 8, 'e5': 9, 'f5': 10, 'g5': 11, 'a5': 12, 'b5': 13, 'c6': 14,
+                'd6': 15, 'e6': 16, 'f6': 17, 'g6': 18, 'a6': 19, 'b6': 20, 'c7': 21
+            };
+
+            document.addEventListener('keydown', (e) => {
+                const key = e.key.toLowerCase() + (e.location === 3 ? '' : '');
+                for (const [noteKey, idx] of Object.entries(keyMap)) {
+                    if (e.key.toLowerCase() === noteKey[0] && e.shiftKey && noteKey[1] === '4' ||
+                        e.key.toLowerCase() === noteKey[0] && noteKey[1] === '5' && !e.shiftKey ||
+                        e.key.toLowerCase() === noteKey[0] && noteKey[1] === '6' && e.shiftKey) {
+                        playNote(idx);
+                        break;
+                    }
+                }
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

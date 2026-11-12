@@ -1,0 +1,62 @@
+// Angklung Game Audio Configuration - Extended 3+ Octaves
+const ANGKLUNG_NOTES = {
+  "notes": [
+    {"id": 1, "name": "C4", "file": "C4.wav", "midiNote": 36, "frequency": 130.81, "duration": 1.229},
+    {"id": 2, "name": "D4", "file": "D4.wav", "midiNote": 38, "frequency": 138.59, "duration": 1.092},
+    {"id": 3, "name": "E4", "file": "E4.wav", "midiNote": 40, "frequency": 146.83, "duration": 1.129},
+    {"id": 4, "name": "F4", "file": "F4.wav", "midiNote": 41, "frequency": 155.56, "duration": 0.509},
+    {"id": 5, "name": "G4", "file": "G4.wav", "midiNote": 43, "frequency": 164.81, "duration": 0.950},
+    {"id": 6, "name": "A4", "file": "A4.wav", "midiNote": 45, "frequency": 174.61, "duration": 1.050},
+    {"id": 7, "name": "B4", "file": "B4.wav", "midiNote": 47, "frequency": 185.00, "duration": 0.620},
+    {"id": 8, "name": "C5", "file": "C5.wav", "midiNote": 48, "frequency": 261.63, "duration": 1.229},
+    {"id": 9, "name": "D5", "file": "D5.wav", "midiNote": 50, "frequency": 277.19, "duration": 1.092},
+    {"id": 10, "name": "E5", "file": "E5.wav", "midiNote": 52, "frequency": 293.67, "duration": 1.129},
+    {"id": 11, "name": "F5", "file": "F5.wav", "midiNote": 53, "frequency": 311.13, "duration": 0.509},
+    {"id": 12, "name": "G5", "file": "G5.wav", "midiNote": 55, "frequency": 329.63, "duration": 0.950},
+    {"id": 13, "name": "A5", "file": "A5.wav", "midiNote": 57, "frequency": 349.23, "duration": 1.050},
+    {"id": 14, "name": "B5", "file": "B5.wav", "midiNote": 59, "frequency": 370.00, "duration": 0.620},
+    {"id": 15, "name": "C6", "file": "C6.wav", "midiNote": 60, "frequency": 523.25, "duration": 1.800},
+    {"id": 16, "name": "D6", "file": "D6.wav", "midiNote": 62, "frequency": 554.37, "duration": 1.092},
+    {"id": 17, "name": "E6", "file": "E6.wav", "midiNote": 64, "frequency": 587.33, "duration": 1.129},
+    {"id": 18, "name": "F6", "file": "F6.wav", "midiNote": 65, "frequency": 622.25, "duration": 0.509},
+    {"id": 19, "name": "G6", "file": "G6.wav", "midiNote": 67, "frequency": 659.25, "duration": 0.950},
+    {"id": 20, "name": "A6", "file": "A6.wav", "midiNote": 69, "frequency": 698.46, "duration": 1.050},
+    {"id": 21, "name": "B6", "file": "B6.wav", "midiNote": 71, "frequency": 740.00, "duration": 0.620},
+    {"id": 22, "name": "C7", "file": "C7.wav", "midiNote": 72, "frequency": 1046.50, "duration": 1.800}
+  ],
+  "metadata": {
+    "instrument": "Angklung",
+    "range": "C4 to C7 (3+ octaves)",
+    "scale": "Chromatic",
+    "format": "WAV",
+    "sampleRate": 44100,
+    "bitDepth": 16,
+    "totalNotes": 22,
+    "source": "User optimized extended samples",
+    "updated": "2026-11-12"
+  }
+};
+
+// Play a note by name
+function playNote(noteName) {
+  const note = ANGKLUNG_NOTES.notes.find(n => n.name === noteName);
+  if (note && typeof Audio !== 'undefined') {
+    const audio = new Audio(note.file);
+    audio.play();
+  }
+}
+
+// Get all notes
+function getAllNotes() {
+  return ANGKLUNG_NOTES.notes;
+}
+
+// Get note by MIDI number
+function getNoteByMidi(midiNote) {
+  return ANGKLUNG_NOTES.notes.find(n => n.midiNote === midiNote);
+}
+
+// Get note by frequency
+function getNoteByFrequency(frequency) {
+  return ANGKLUNG_NOTES.notes.find(n => Math.abs(n.frequency - frequency) < 1);
+}
