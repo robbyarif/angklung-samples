@@ -251,21 +251,21 @@
             <button onclick="stopAllAudio()">⏹ Stop All</button>
         </div>
 
-        <!-- Lower Octave -->
+        <!-- Low Octave: 1-8 = C4 to C5 -->
         <div class="octave-section">
-            <div class="octave-title">Lower Octave (C4 - B4)</div>
+            <div class="octave-title">Low (1 - 8)</div>
             <div class="notes-grid" id="octave-1"></div>
         </div>
 
-        <!-- Middle Octave -->
+        <!-- Mid Octave: 1-8 = C5 to C6 -->
         <div class="octave-section">
-            <div class="octave-title">Middle Octave (C5 - C6)</div>
+            <div class="octave-title">Mid (1 - 8)</div>
             <div class="notes-grid" id="octave-2"></div>
         </div>
 
-        <!-- Higher Octave -->
+        <!-- High Octave: 1-8 = C6 to C7 -->
         <div class="octave-section">
-            <div class="octave-title">Higher Octave (D6 - C7)</div>
+            <div class="octave-title">High (1 - 8)</div>
             <div class="notes-grid" id="octave-3"></div>
         </div>
 
@@ -333,19 +333,25 @@
             setupKeyboardShortcuts();
         }
 
+        // Each row shows scale degrees 1-8 (8 = the octave repeat of 1).
+        // Each octave's 8 is the next row's 1, so C5 and C6 appear twice.
+        const DEGREE_ROWS = [
+            {octaveId: 'octave-1', names: ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5']},
+            {octaveId: 'octave-2', names: ['C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'B5', 'C6']},
+            {octaveId: 'octave-3', names: ['C6', 'D6', 'E6', 'F6', 'G6', 'A6', 'B6', 'C7']}
+        ];
+
         function createNoteButtons() {
-            [
-                {octaveId: 'octave-1', data: audioConfig.octave1},
-                {octaveId: 'octave-2', data: audioConfig.octave2},
-                {octaveId: 'octave-3', data: audioConfig.octave3}
-            ].forEach(octave => {
-                const container = document.getElementById(octave.octaveId);
-                octave.data.forEach(note => {
+            const allNotes = [...audioConfig.octave1, ...audioConfig.octave2, ...audioConfig.octave3];
+            DEGREE_ROWS.forEach(row => {
+                const container = document.getElementById(row.octaveId);
+                row.names.forEach((name, i) => {
+                    const note = allNotes.find(n => n.name === name);
                     const button = document.createElement('button');
                     button.className = 'note-button';
                     button.innerHTML = `
-                        <span class="note-name">${note.name}</span>
-                        <span class="note-freq">${note.freq} Hz</span>
+                        <span class="note-name">${i + 1}</span>
+                        <span class="note-freq">${name} · ${note.freq} Hz</span>
                     `;
                     // note.id is 1-based across all 22 notes; audioElements is a flat 0-based list
                     button.onclick = () => playNote(note.id - 1);
