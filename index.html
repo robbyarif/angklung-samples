@@ -137,6 +137,20 @@ h2{font-size:clamp(24px,min(4vw,6.4vh),52px);margin:0;color:var(--gold)}
   background:rgba(15,24,48,.7);color:var(--sand);font-size:clamp(16px,2vw,24px);cursor:pointer;touch-action:manipulation}
 #start{position:fixed;inset:0;z-index:50;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3vh;text-align:center}
 #start.hide{display:none}
+/* mic play-along */
+#micBtn{width:clamp(40px,4vw,56px);height:clamp(40px,4vw,56px);padding:0;justify-content:center;font-size:clamp(18px,2vw,26px)}
+#micBtn.on{background:var(--red);color:#fff;border-color:var(--red);animation:micpulse 1.6s infinite}
+@keyframes micpulse{0%,100%{box-shadow:0 0 0 0 rgba(200,16,46,.55)}50%{box-shadow:0 0 0 10px rgba(200,16,46,0)}}
+.micstatus{font-size:clamp(12px,1.4vw,18px);opacity:.8}
+.modal{position:fixed;inset:0;z-index:60;background:rgba(7,11,24,.72);display:flex;align-items:center;justify-content:center;padding:4vh 5vw}
+.modal[hidden],.modal [hidden]{display:none}
+.modal-card{background:var(--indigo);border:2px solid rgba(242,179,61,.5);border-radius:18px;max-width:min(560px,90vw);padding:3vh 3vw;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.modal-card h3{margin:0 0 1.5vh;font-size:clamp(20px,2.6vw,30px);color:var(--gold)}
+.modal-card p{margin:0 0 1.2vh;line-height:1.6;font-size:clamp(15px,1.8vw,22px)}
+.modal-card p.en{opacity:.75;font-size:clamp(13px,1.5vw,18px)}
+.modal-actions{display:flex;gap:1.2vw;justify-content:center;margin-top:2vh;flex-wrap:wrap}
+.spinner{width:48px;height:48px;margin:1vh auto 2vh;border-radius:50%;border:5px solid rgba(239,231,218,.2);border-top-color:var(--gold);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 @media (orientation:portrait){
   .body{grid-template-columns:1fr}
   .art{order:-1;height:28vh}
@@ -299,6 +313,8 @@ h2{font-size:clamp(24px,min(4vw,6.4vh),52px);margin:0;color:var(--gold)}
       <button class="chip" data-song="twinkle">小星星 Twinkle Twinkle</button>
       <button class="chip" data-song="rasa">Rasa Sayange 印尼民謠</button>
       <button class="chip" data-song="spring">望春風 · Longing for Spring Breeze</button>
+      <button class="btn ghost small" id="micBtn" aria-pressed="false" aria-label="Mic play-along" title="麥克風 · Mic">🎤</button>
+      <span class="micstatus" id="micStatus"></span>
       <button class="btn small" id="demoBtn" style="margin-left:auto">▶ 示範 Demo</button>
       <button class="btn ghost small" id="resetBtn">↺ 重來 Restart</button>
     </div>
@@ -306,6 +322,30 @@ h2{font-size:clamp(24px,min(4vw,6.4vh),52px);margin:0;color:var(--gold)}
     <div class="keys" id="keys"></div>
     <div class="helper" id="helper">選一首歌，照著亮起來的數字按下去！ · Pick a song and follow the glowing number.</div>
   </section>
+</div>
+
+<!-- mic consent + loading popup (play-along) -->
+<div id="micModal" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="micTitle">
+    <div data-pane="ask">
+      <h3 id="micTitle">🎤 使用麥克風 · Use the microphone</h3>
+      <p class="zh">這個功能會用麥克風聽你現場搖的竹搖鈴，辨認音高，讓數字跟著亮起來。聲音只在你的瀏覽器裡處理，不會錄音，也不會上傳。</p>
+      <p class="en">This uses your microphone to hear your live angklung playing and detect each note, so the numbers light up as you play. Sound is processed only in your browser. Nothing is recorded or uploaded.</p>
+      <div class="modal-actions">
+        <button class="btn ghost small" id="micCancel">取消 Cancel</button>
+        <button class="btn small" id="micOk">開始 Start</button>
+      </div>
+    </div>
+    <div data-pane="loading" hidden>
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="zh">正在校正環境噪音… 請保持安靜 2 秒</p>
+      <p class="en">Calibrating background noise… stay quiet for 2 seconds</p>
+    </div>
+    <div data-pane="error" hidden>
+      <p id="micErr"></p>
+      <div class="modal-actions"><button class="btn small" id="micClose">關閉 Close</button></div>
+    </div>
+  </div>
 </div>
 
 <div id="ctl">
@@ -468,6 +508,7 @@ function go(id){
   to.classList.add("on");
   cur = id;
   stopAllVoices();
+  if(id!=="play" && mic.on) micStop();   // mic only listens on the Play screen
   narrate(id);
   if(id==="play"){ bgmStop(); renderSeq(); } else bgmStart();
   if(id==="play"){ }
@@ -793,6 +834,179 @@ document.getElementById("goBtn").onclick=()=>{
   narrate("hub"); bgmStart(); resetIdle();
   const d=document.documentElement; try{(d.requestFullscreen||d.webkitRequestFullscreen||(()=>{})).call(d);}catch(_){}
 };
+/* ---------- mic: play-along detection ----------
+   Listens to live angklung playing while the mic button is on. Nothing is recorded or sent anywhere.
+   A detected note lights its key and advances the song. No sound is played back, so the
+   speaker output can't echo into the mic and trigger false notes. */
+const mic = { on:false, stream:null, ctx:null, analyser:null, freq:null, time:null, gate:null,
+              raf:0, lastPeakBin:-10, peakRepeat:0, stableId:null, stableCount:0, silent:0, locked:null };
+const MIC_BAND = { min:170, max:1100 };  // lowest note 196 Hz (5L); top of band covers 1H's 2nd partial
+const MIC_EXACT_CENTS = 60;              // detected pitch within this of a note counts as that note
+const MIC_STABLE_FRAMES = 6;             // frames a pitch must hold (~100 ms) before it counts
+const MIC_REST_FRAMES = 8;               // silent frames before the same note can count again
+const micModal = document.getElementById("micModal");
+
+function micPane(name){ micModal.querySelectorAll("[data-pane]").forEach(p=>{ p.hidden = p.dataset.pane!==name; }); }
+function micUI(on, text){
+  const b = document.getElementById("micBtn");
+  b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on));
+  document.getElementById("micStatus").textContent = text || "";
+}
+function micErrorText(err){
+  if(!window.isSecureContext || !navigator.mediaDevices) return "麥克風需要安全連線 (https) · Microphone needs a secure (https) connection.";
+  const n = err && err.name;
+  if(n==="NotAllowedError") return "麥克風權限被拒絕，請在瀏覽器的網站設定中允許。 · Microphone access was denied. Allow it in the browser's site settings.";
+  if(n==="NotFoundError") return "找不到麥克風。 · No microphone found.";
+  if(n==="NotReadableError") return "麥克風正被其他程式使用。 · The microphone is in use by another app.";
+  return "無法啟動麥克風。 · Could not start the microphone.";
+}
+function micRms(){
+  mic.analyser.getFloatTimeDomainData(mic.time);
+  let s = 0; for(let i=0;i<mic.time.length;i++) s += mic.time[i]*mic.time[i];
+  return Math.sqrt(s/mic.time.length);
+}
+// Parabolic interpolation between neighbouring bins
+function micInterp(bin, binHz){
+  const a = mic.freq[bin-1], b = mic.freq[bin], c = mic.freq[bin+1];
+  const d = a - 2*b + c;
+  let s = d===0 ? 0 : (a-c)/(2*d); s = Math.max(-0.5, Math.min(0.5, s));
+  return (bin+s)*binHz;
+}
+// Melody-band peak, with a noise gate (clear peak above the band's median and above the calibrated loudness)
+// and an overtone check (a strong peak at half the frequency means that lower tone is the real note)
+function micMeasure(){
+  mic.analyser.getByteFrequencyData(mic.freq);
+  const binHz = mic.ctx.sampleRate / mic.analyser.fftSize;
+  const minBin = Math.max(1, Math.floor(MIC_BAND.min/binHz));
+  const maxBin = Math.min(mic.freq.length-2, Math.ceil(MIC_BAND.max/binHz));
+  let peak = minBin, maxV = 0;
+  for(let i=minBin;i<=maxBin;i++){ if(mic.freq[i]>maxV){ maxV = mic.freq[i]; peak = i; } }
+  const sorted = mic.freq.slice(minBin, maxBin+1).sort();
+  const median = sorted[sorted.length>>1];
+  const loud = micRms() >= (mic.gate ?? 0.01);
+  if(!(loud && maxV>30 && maxV-median>=25)){ mic.peakRepeat = 0; return 0; }
+  // a real note keeps its bin from frame to frame; noise jumps around
+  mic.peakRepeat = Math.abs(peak-mic.lastPeakBin)<=1 ? mic.peakRepeat+1 : 1;
+  mic.lastPeakBin = peak;
+  if(mic.peakRepeat<3) return 0;
+  let bin = peak;
+  for(;;){
+    const half = Math.round(bin/2);
+    if(half*binHz < MIC_BAND.min) break;
+    let hp = half, hv = 0;
+    for(let i=Math.max(minBin,half-1); i<=half+1; i++){ if(mic.freq[i]>hv){ hv = mic.freq[i]; hp = i; } }
+    if(hv < 0.7*maxV) break;
+    bin = hp;
+  }
+  return micInterp(bin, binHz);
+}
+// Closest note by pitch class, with the offset in cents.
+// Each angklung note rings two tubes an octave apart, so the octave can read one or more octaves off.
+// Matching ignores the octave (folded to within ±600 cents); the octave with the closest pitch breaks ties.
+// The recorded samples sound one octave above their table frequencies (measured: "1" sample ≈ 522 Hz,
+// table says 261.63), so the mic matches against the sounding pitch, 2 × the table value.
+function micNearest(hz){
+  let best = null;
+  for(const nt of NOTES){
+    const raw = 1200*Math.log2(hz/(nt.f*2));
+    const oct = Math.round(raw/1200);
+    const folded = raw - 1200*oct;
+    const score = Math.abs(folded) + Math.abs(oct)*25;   // small penalty for each octave away
+    if(!best || score < best.score) best = { nt, c: folded, score };
+  }
+  return best;
+}
+function micNoteHeard(id){
+  resetIdle();
+  const k = keyEls[id];
+  k.classList.add("down"); setTimeout(()=>k.classList.remove("down"), 200);
+  document.getElementById("micStatus").textContent = "🎤 " + byId[id].n + (byId[id].oct>0 ? "↑" : byId[id].oct<0 ? "↓" : "");
+  onNotePlayed(id);
+}
+function micHear(hz){
+  mic.silent = 0;
+  const m = micNearest(hz);
+  if(Math.abs(m.c) > MIC_EXACT_CENTS){ mic.stableId = null; mic.stableCount = 0; return; }
+  const id = m.nt.id;
+  if(id === mic.locked) return;          // same ringing note: wait for a rest before it counts again
+  if(id === mic.stableId) mic.stableCount++;
+  else { mic.stableId = id; mic.stableCount = 1; }
+  if(mic.stableCount >= MIC_STABLE_FRAMES){
+    mic.locked = id; mic.stableId = null; mic.stableCount = 0;
+    micNoteHeard(id);
+  }
+}
+function micSilence(){
+  mic.stableId = null; mic.stableCount = 0;
+  if(++mic.silent >= MIC_REST_FRAMES) mic.locked = null;
+}
+function micLoop(){
+  if(!mic.on) return;
+  const hz = micMeasure();
+  if(hz > 0) micHear(hz); else micSilence();
+  mic.raf = requestAnimationFrame(micLoop);
+}
+function micStop(){
+  mic.on = false;
+  cancelAnimationFrame(mic.raf);
+  if(mic.stream) mic.stream.getTracks().forEach(t=>t.stop());
+  if(mic.ctx) mic.ctx.close();
+  mic.stream = null; mic.ctx = null; mic.locked = null;
+  micModal.hidden = true;                    // in case it was still showing the calibration popup
+  micUI(false, "");
+}
+async function micStart(){
+  micPane("loading");
+  // Create and resume the audio context inside the click, before any await.
+  // A context created after the await can start suspended (no user gesture left) and then gives silence.
+  mic.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  mic.ctx.resume();
+  let stream;
+  try{
+    // Turn off mic processing: noise suppression and auto gain distort tonal notes
+    stream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:false } });
+  }catch(err){
+    console.error("Microphone error:", err && err.name, err && err.message);
+    mic.ctx.close(); mic.ctx = null;
+    micPane("error");
+    document.getElementById("micErr").textContent = micErrorText(err);
+    return;
+  }
+  mic.stream = stream;
+  await mic.ctx.resume();
+  mic.analyser = mic.ctx.createAnalyser();
+  mic.analyser.fftSize = 4096;
+  mic.analyser.smoothingTimeConstant = 0;   // no smoothing, or one note's energy hides the next
+  mic.freq = new Uint8Array(mic.analyser.frequencyBinCount);
+  mic.time = new Float32Array(mic.analyser.fftSize);
+  const hp = mic.ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 150;
+  const lp = mic.ctx.createBiquadFilter(); lp.type = "lowpass";  lp.frequency.value = 1600;
+  hp.connect(lp); lp.connect(mic.analyser);
+  mic.ctx.createMediaStreamSource(stream).connect(hp);
+
+  // Calibrate: measure the room's background loudness for 2 s (stay quiet)
+  mic.on = true; mic.gate = null;
+  micUI(true, "校正中 · Calibrating…");
+  let maxRms = 0;
+  const t0 = performance.now();
+  while(mic.on && performance.now()-t0 < 2000){
+    maxRms = Math.max(maxRms, micRms());
+    await new Promise(r=>setTimeout(r, 20));
+  }
+  if(!mic.on) return;                        // stopped while calibrating
+  mic.gate = Math.max(maxRms*2, 0.003);
+  micUI(true, "聆聽中 · Listening");
+  micModal.hidden = true;
+  micLoop();
+}
+document.getElementById("micBtn").onclick = ()=>{
+  if(mic.on){ micStop(); return; }
+  micPane("ask"); micModal.hidden = false;
+};
+document.getElementById("micOk").onclick = ()=>{ micStart(); };
+document.getElementById("micCancel").onclick = ()=>{ micModal.hidden = true; };
+document.getElementById("micClose").onclick = ()=>{ micModal.hidden = true; };
+
 // prevent pinch / double-tap zoom on tablets
 document.addEventListener("gesturestart",e=>e.preventDefault());
 renderSeq();
