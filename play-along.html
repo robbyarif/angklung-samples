@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Angklung Play Along - Twinkle Twinkle</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .music-section {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .music-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .notation-display {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            border: 2px solid #667eea;
+        }
+
+        .note-box {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #e9ecef;
+            border-radius: 8px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .note-box.current {
+            background: #667eea;
+            color: white;
+            border-color: #764ba2;
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .note-box.completed {
+            background: #4caf50;
+            color: white;
+            opacity: 0.6;
+        }
+
+        .note-box.upcoming {
+            background: #e9ecef;
+            color: #999;
+        }
+
+        .bar-divider {
+            width: 2px;
+            height: 50px;
+            background: #ddd;
+            margin: 0 4px;
+        }
+
+        .playback-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .playback-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .mic-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            border: 2px dashed #667eea;
+            text-align: center;
+        }
+
+        .mic-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        .mic-status {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .frequency-display {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .frequency-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .frequency-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #667eea;
+            font-family: 'Courier New', monospace;
+        }
+
+        .note-match {
+            font-size: 1.1em;
+            margin-top: 10px;
+            color: #666;
+        }
+
+        .note-match.match {
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        .note-match.close {
+            color: #ff9800;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 10px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .hint {
+            background: #e3f2fd;
+            padding: 15px;
+            border-left: 4px solid #667eea;
+            border-radius: 5px;
+            margin-top: 20px;
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .note-box {
+                width: 40px;
+                height: 40px;
+                font-size: 1.2em;
+            }
+
+            .bar-divider {
+                width: 2px;
+                height: 40px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎵 Angklung Play Along</h1>
+            <p class="subtitle">Twinkle Twinkle Little Star</p>
+        </header>
+
+        <div class="controls">
+            <button onclick="playGuidemelody()">▶ Hear the Melody</button>
+            <button onclick="startMicInput()" id="startMicBtn">🎤 Start Playing</button>
+            <button onclick="stopMicInput()" id="stopMicBtn" disabled>⏹ Stop</button>
+            <button onclick="resetGame()">🔄 Reset</button>
+        </div>
+
+        <div class="music-section">
+            <div class="music-title">Number Notation (Do=1, Re=2, Mi=3...)</div>
+            <div class="notation-display" id="notationDisplay"></div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <div class="playback-section">
+            <div class="playback-label">First, listen to the melody:</div>
+            <div id="playbackStatus">Click "Hear the Melody" to start</div>
+        </div>
+
+        <div class="mic-section">
+            <div class="mic-icon">🎤</div>
+            <div class="mic-status" id="micStatus">Ready to listen</div>
+
+            <div class="frequency-display">
+                <div class="frequency-label">Detected Frequency:</div>
+                <div class="frequency-value" id="frequencyValue">-- Hz</div>
+                <div class="note-match" id="noteMatch">Waiting for sound...</div>
+            </div>
+
+            <div class="hint">
+                <strong>💡 Tip:</strong> Play the angklung notes in order shown in the blue box above.
+                The app will automatically detect when you've played the correct note and move to the next one.
+            </div>
+        </div>
+
+        <div id="message"></div>
+    </div>
+
+    <script>
+        // Twinkle Twinkle Little Star in number notation
+        // Do=1, Re=2, Mi=3, Fa=4, Sol=5, La=6, Ti=7
+        const MELODY = [
+            1, 1, 5, 5, 6, 6, 5, // Twinkle twinkle little star
+            4, 4, 3, 3, 2, 2, 1  // How I wonder what you are
+        ];
+
+        const NOTE_TO_FREQUENCY = {
+            1: 261.63,  // C5 (Do)
+            2: 277.19,  // D5 (Re)
+            3: 293.67,  // E5 (Mi)
+            4: 311.13,  // F5 (Fa)
+            5: 329.63,  // G5 (Sol)
+            6: 349.23,  // A5 (La)
+            7: 370.00   // B5 (Ti)
+        };
+
+        const NOTE_NAMES = {
+            1: 'Do (C5)',
+            2: 'Re (D5)',
+            3: 'Mi (E5)',
+            4: 'Fa (F5)',
+            5: 'Sol (G5)',
+            6: 'La (A5)',
+            7: 'Ti (B5)'
+        };
+
+        const AUDIO_FILES = {
+            1: 'C5.wav',
+            2: 'D5.wav',
+            3: 'E5.wav',
+            4: 'F5.wav',
+            5: 'G5.wav',
+            6: 'A5.wav',
+            7: 'B5.wav'
+        };
+
+        let currentNoteIndex = 0;
+        let audioContext = null;
+        let analyser = null;
+        let dataArray = null;
+        let animationId = null;
+        let mediaStream = null;
+        let micActive = false;
+        let audioElements = {};
+
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 4096;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+            }
+        }
+
+        function preloadAudio() {
+            for (let i = 1; i <= 7; i++) {
+                const audio = new Audio(AUDIO_FILES[i]);
+                audio.preload = 'auto';
+                audioElements[i] = audio;
+            }
+        }
+
+        function renderNotation() {
+            const display = document.getElementById('notationDisplay');
+            display.innerHTML = '';
+
+            MELODY.forEach((note, index) => {
+                if (index > 0 && (index === 7)) {
+                    const divider = document.createElement('div');
+                    divider.className = 'bar-divider';
+                    display.appendChild(divider);
+                }
+
+                const box = document.createElement('div');
+                box.className = 'note-box';
+
+                if (index < currentNoteIndex) {
+                    box.classList.add('completed');
+                } else if (index === currentNoteIndex) {
+                    box.classList.add('current');
+                } else {
+                    box.classList.add('upcoming');
+                }
+
+                box.textContent = note;
+                display.appendChild(box);
+            });
+
+            const progress = (currentNoteIndex / MELODY.length) * 100;
+            document.getElementById('progressFill').style.width = progress + '%';
+        }
+
+        async function playGuidemelody() {
+            initAudio();
+            document.getElementById('playbackStatus').textContent = 'Playing...';
+
+            for (let i = 0; i < MELODY.length; i++) {
+                const note = MELODY[i];
+                const audio = audioElements[note];
+                audio.currentTime = 0;
+                audio.play();
+
+                await new Promise(resolve => {
+                    audio.onended = resolve;
+                    setTimeout(resolve, 600);
+                });
+            }
+
+            document.getElementById('playbackStatus').textContent = 'Finished! Now it\'s your turn.';
+        }
+
+        async function startMicInput() {
+            initAudio();
+
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const source = audioContext.createMediaStreamAudioSource(mediaStream);
+                source.connect(analyser);
+
+                micActive = true;
+                document.getElementById('startMicBtn').disabled = true;
+                document.getElementById('stopMicBtn').disabled = false;
+                document.getElementById('micStatus').textContent = 'Listening...';
+
+                detectFrequency();
+            } catch (error) {
+                showMessage('Microphone access denied. Please allow microphone permissions.', 'error');
+            }
+        }
+
+        function stopMicInput() {
+            micActive = false;
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            document.getElementById('startMicBtn').disabled = false;
+            document.getElementById('stopMicBtn').disabled = true;
+            document.getElementById('micStatus').textContent = 'Stopped';
+            document.getElementById('frequencyValue').textContent = '-- Hz';
+            document.getElementById('noteMatch').textContent = 'Waiting for sound...';
+        }
+
+        function detectFrequency() {
+            analyser.getByteFrequencyData(dataArray);
+
+            // Find peak frequency
+            let maxValue = 0;
+            let maxIndex = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                if (dataArray[i] > maxValue) {
+                    maxValue = dataArray[i];
+                    maxIndex = i;
+                }
+            }
+
+            // Convert bin index to frequency
+            const nyquist = audioContext.sampleRate / 2;
+            const frequency = (maxIndex * nyquist) / analyser.frequencyBinCount;
+
+            // Only show if significant sound detected
+            if (maxValue > 30) {
+                document.getElementById('frequencyValue').textContent = frequency.toFixed(1) + ' Hz';
+                checkNoteMatch(frequency);
+            } else {
+                document.getElementById('frequencyValue').textContent = '-- Hz';
+                document.getElementById('noteMatch').textContent = 'Listening...';
+            }
+
+            if (micActive) {
+                animationId = requestAnimationFrame(detectFrequency);
+            }
+        }
+
+        function checkNoteMatch(detectedFreq) {
+            const targetNote = MELODY[currentNoteIndex];
+            const targetFreq = NOTE_TO_FREQUENCY[targetNote];
+
+            // Tolerance: ±5 Hz for exact match, ±15 Hz for close match
+            const exactTolerance = 5;
+            const closeTolerance = 15;
+            const difference = Math.abs(detectedFreq - targetFreq);
+
+            const matchElement = document.getElementById('noteMatch');
+
+            if (difference < exactTolerance && detectedFreq > 100) {
+                matchElement.textContent = `✓ Correct! ${NOTE_NAMES[targetNote]}`;
+                matchElement.classList.remove('close');
+                matchElement.classList.add('match');
+
+                // Advance to next note after 500ms
+                setTimeout(() => {
+                    currentNoteIndex++;
+                    renderNotation();
+
+                    if (currentNoteIndex >= MELODY.length) {
+                        completeGame();
+                    }
+                }, 300);
+            } else if (difference < closeTolerance && detectedFreq > 100) {
+                matchElement.textContent = `≈ Close! Aim for ${targetFreq.toFixed(1)} Hz`;
+                matchElement.classList.add('close');
+                matchElement.classList.remove('match');
+            } else {
+                matchElement.textContent = `Need ${NOTE_NAMES[targetNote]} (${targetFreq.toFixed(1)} Hz)`;
+                matchElement.classList.remove('close', 'match');
+            }
+        }
+
+        function completeGame() {
+            stopMicInput();
+            showMessage('🎉 Amazing! You completed "Twinkle Twinkle Little Star"!', 'success');
+            document.getElementById('micStatus').textContent = '✓ Completed!';
+        }
+
+        function resetGame() {
+            currentNoteIndex = 0;
+            stopMicInput();
+            renderNotation();
+            document.getElementById('message').innerHTML = '';
+            document.getElementById('playbackStatus').textContent = 'Click "Hear the Melody" to start';
+        }
+
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = text;
+        }
+
+        // Initialize
+        preloadAudio();
+        renderNotation();
+    </script>
+</body>
+</html>
